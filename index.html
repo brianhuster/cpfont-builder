@@ -7,8 +7,6 @@
 	<title>CrossPoint Font Builder (Local Offline)</title>
 	<!-- Tailwind CSS -->
 	<script src="https://cdn.tailwindcss.com"></script>
-	<!-- opentype.js -->
-	<script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
 	<style>
 		.dot-field {
 			background-image: radial-gradient(rgba(120, 119, 198, 0.1) 1px, transparent 1px);
@@ -245,7 +243,8 @@
 					<div class="flex items-center justify-between border-b border-stone-200 pb-3">
 						<div>
 							<h4 class="text-sm font-semibold text-stone-800">Generated Files</h4>
-							<p class="text-xs text-stone-500 mt-0.5">Ready to load directly onto your device's SD Card.</p>
+							<p class="text-xs text-stone-500 mt-0.5">Ready to load directly onto your device's SD Card.
+							</p>
 						</div>
 					</div>
 					<ul id="downloadList" class="mt-3 divide-y divide-stone-100"></ul>
@@ -263,7 +262,7 @@
 	<!-- App Main Entry Module -->
 	<script type="module">
 		import {analyzeFontFolder, setFileInput, INTERVAL_PRESETS, sanitizeFamilyName, CJK_PRESET_VALUES, customIntervalsContainCjk} from './fontBuilder.js';
-		import {generateCpfontMultistyle, resolveIntervals} from './fontConvert.js';
+		import {buildFontPackage} from './fontConvert.js';
 
 		// Populate Presets in DOM
 		const presetsList = document.getElementById('presetsList');
@@ -323,8 +322,6 @@
 		const downloadContainer = document.getElementById('downloadContainer');
 		const elDownloadList = document.getElementById('downloadList');
 
-		let builtFiles = []; // Array of { name, blob }
-
 		// Logs helper
 		function log(msg, type = 'info') {
 			logContainer.classList.remove('hidden');
@@ -344,16 +341,25 @@
 			logConsole.innerHTML = '';
 		});
 
+		// Helper to auto-extract family name from manual file selects
+		function extractFamilyNameFromFile(file) {
+			if (!file) return '';
+			const stem = file.name.replace(/\.(ttf|otf)$/i, '');
+			const cleanStem = stem.replace(/[-_ ]?(regular|bold|italic|bolditalic|normal|book|roman|medium|Rg|Bd|It|bi|thin|hairline|light|black|heavy|semibold|demibold|extrabold|ultrabold)$/i, '');
+			return cleanStem.replace(/[-_]/g, ' ');
+		}
 
+		inputRegular.addEventListener('change', (e) => {
+			if (!elFamilyName.value.trim() && e.target.files[0]) {
+				elFamilyName.value = extractFamilyNameFromFile(e.target.files[0]);
+			}
+		});
 
 		// Folder select
 		elFolder.addEventListener('change', (e) => {
 			const analysis = analyzeFontFolder(e.target.files);
 			if (!analysis) return;
 			const {result, familyName, otherFamilies} = analysis;
-
-			console.log('Font Builder Auto-Detect Result:', result);
-			console.log('Main file inputs:', {inputRegular, inputBold, inputItalic, inputBoldItalic});
 
 			setFileInput(inputRegular, result.regular);
 			setFileInput(inputBold, result.bold);
@@ -378,14 +384,6 @@
 		});
 
 		let fallbackCounter = 0;
-
-		// Helper to auto-extract family name from manual file selects
-		function extractFamilyNameFromFile(file) {
-			if (!file) return '';
-			const stem = file.name.replace(/\.(ttf|otf)$/i, '');
-			const cleanStem = stem.replace(/[-_ ]?(regular|bold|italic|bolditalic|normal|book|roman|medium|Rg|Bd|It|bi|thin|hairline|light|black|heavy|semibold|demibold|extrabold|ultrabold)$/i, '');
-			return cleanStem.replace(/[-_]/g, ' ');
-		}
 
 		function renameFallbackHeaders() {
 			const rows = elFallbackList.querySelectorAll('.fallback-row');
@@ -451,7 +449,6 @@
 			const elBold = row.querySelector('.fallback-bold');
 			const elItalic = row.querySelector('.fallback-italic');
 			const elBoldItalic = row.querySelector('.fallback-bolditalic');
-			const btnRemove = row.querySelector('.btn-remove-fallback');
 
 			elFolderInput.addEventListener('change', (e) => {
 				const analysis = analyzeFontFolder(e.target.files);
@@ -463,7 +460,7 @@
 				setFileInput(elItalic, result.italic);
 				setFileInput(elBoldItalic, result.bolditalic);
 
-				if (familyName) {
+				if (familyName && !elName.value) {
 					elName.value = familyName.replace(/[-_]/g, ' ');
 				}
 
@@ -483,7 +480,7 @@
 				}
 			});
 
-			btnRemove.addEventListener('click', () => {
+			row.querySelector('.btn-remove-fallback').addEventListener('click', () => {
 				row.remove();
 				renameFallbackHeaders();
 			});
@@ -496,21 +493,19 @@
 			renameFallbackHeaders();
 		});
 
-		inputRegular.addEventListener('change', (e) => {
-			if (!elFamilyName.value.trim() && e.target.files[0]) {
-				elFamilyName.value = extractFamilyNameFromFile(e.target.files[0]);
+		// Dynamic UI sizes toggle on CJK presets
+		document.addEventListener('change', (e) => {
+			if (e.target.name === 'intervalPreset' || e.target.id === 'customIntervals') {
+				const checkedPresets = Array.from(document.querySelectorAll('input[name="intervalPreset"]:checked')).map(cb => cb.value);
+				const hasCjkPreset = checkedPresets.some(p => CJK_PRESET_VALUES.includes(p));
+				const hasCjkCustom = customIntervalsContainCjk(elCustomIntervals.value);
+				if (hasCjkPreset || hasCjkCustom) {
+					elUiSizesContainer.classList.remove('hidden');
+				} else {
+					elUiSizesContainer.classList.add('hidden');
+				}
 			}
 		});
-
-		// Helper to read File into ArrayBuffer
-		function readFileAsArrayBuffer(file) {
-			return new Promise((resolve, reject) => {
-				const reader = new FileReader();
-				reader.onload = () => resolve(reader.result);
-				reader.onerror = () => reject(reader.error);
-				reader.readAsArrayBuffer(file);
-			});
-		}
 
 		// Main Build Action
 		btnBuild.addEventListener('click', async () => {
@@ -526,10 +521,9 @@
 				return;
 			}
 
-			// Check fallback definitions
 			// Validate dynamic fallback rows
 			const fallbackRows = Array.from(elFallbackList.querySelectorAll('.fallback-row'));
-			const fallbackData = [];
+			const fallbackFamilies = [];
 
 			for (let i = 0; i < fallbackRows.length; i++) {
 				const row = fallbackRows[i];
@@ -553,7 +547,7 @@
 				}
 
 				if (name) {
-					fallbackData.push({
+					fallbackFamilies.push({
 						name,
 						files: {0: fileReg, 1: fileBold, 2: fileItal, 3: fileBI}
 					});
@@ -572,16 +566,9 @@
 			log('Font convert process started locally.');
 
 			try {
-				// Resolve intervals / scripts
 				const checkedPresets = Array.from(document.querySelectorAll('input[name="intervalPreset"]:checked'))
 					.map(cb => cb.value);
-				const custom = elCustomIntervals.value.trim();
-				const intervalList = checkedPresets.join(',') + (custom ? ',' + custom : '');
-				const resolvedRanges = resolveIntervals(intervalList);
 
-				log(`Resolved Unicode coverage. Merged into ${resolvedRanges.length} continuous interval ranges.`);
-
-				// Sizes
 				const sizes = [
 					parseInt(document.getElementById('size0').value) || 12,
 					parseInt(document.getElementById('size1').value) || 14,
@@ -593,97 +580,37 @@
 				const uiSize1 = parseInt(inputUiSize1.value) || 10;
 				if (!sizes.includes(uiSize0)) sizes.push(uiSize0);
 				if (!sizes.includes(uiSize1)) sizes.push(uiSize1);
-				sizes.sort((a, b) => a - b);
 
-				log(`Generating for sizes: ${sizes.join(', ')} pt.`);
-
-				// Load files into ArrayBuffers
-				progressText.innerText = 'Reading font files...';
-				progressBar.style.width = '15%';
-				progressPct.innerText = '15%';
-				log('Loading files into browser memory...');
-
-				const regBuffer = await readFileAsArrayBuffer(regFile);
-				const styleFontsRaw = {0: regBuffer};
-
-				const boldFile = inputBold.files[0];
-				if (boldFile) styleFontsRaw[1] = await readFileAsArrayBuffer(boldFile);
-
-				const italicFile = inputItalic.files[0];
-				if (italicFile) styleFontsRaw[2] = await readFileAsArrayBuffer(italicFile);
-
-				const boldItalicFile = inputBoldItalic.files[0];
-				if (boldItalicFile) styleFontsRaw[3] = await readFileAsArrayBuffer(boldItalicFile);
-
-				const fallbackStyleFontsRaw = {};
-
-				async function addFallbackRaw(styleId, file) {
-					if (!file) return;
-					fallbackStyleFontsRaw[styleId] = fallbackStyleFontsRaw[styleId] || [];
-					fallbackStyleFontsRaw[styleId].push(await readFileAsArrayBuffer(file));
-				}
-
-				// Load all fallback files dynamically
-				for (const data of fallbackData) {
-					await addFallbackRaw(0, data.files[0]);
-					await addFallbackRaw(1, data.files[1]);
-					await addFallbackRaw(2, data.files[2]);
-					await addFallbackRaw(3, data.files[3]);
-				}
-
-				// Parse fonts with opentype.js
-				log('Parsing font OpenType tables...');
-				const styleFonts = {};
-				for (const [sid, buf] of Object.entries(styleFontsRaw)) {
-					styleFonts[sid] = opentype.parse(buf);
-				}
-
-				const fallbackStyleFonts = {};
-				for (const [sid, buffers] of Object.entries(fallbackStyleFontsRaw)) {
-					fallbackStyleFonts[sid] = buffers.map(buf => opentype.parse(buf));
-				}
-
-				builtFiles = [];
-				const totalSteps = sizes.length;
-				const darken = elDarkenAa.checked;
-
-				// Build each size
-				for (let i = 0; i < sizes.length; i++) {
-					const sz = sizes[i];
-					const stepPercent = 15 + Math.round((i / totalSteps) * 75);
-					progressBar.style.width = `${stepPercent}%`;
-					progressPct.innerText = `${stepPercent}%`;
-					progressText.innerText = `Rasterizing size ${sz}pt...`;
-
-					log(`Generating ${famName}_${sz}.cpfont...`);
-
-					const fileBinary = await generateCpfontMultistyle({
-						styleFonts,
-						size: sz,
-						intervals: resolvedRanges,
-						darkenAa: darken,
-						fallbackStyleFonts
-					});
-
-					builtFiles.push({
-						name: `${sanitizeFamilyName(famName)}_${sz}.cpfont`,
-						data: fileBinary
-					});
-
-					log(`Successfully built ${famName}_${sz}.cpfont (${(fileBinary.byteLength / 1024).toFixed(1)} KB)`, 'success');
-				}
-
-				progressBar.style.width = '100%';
-				progressPct.innerText = '100%';
-				progressText.innerText = 'Done!';
-				log('All font files compiled successfully!', 'success');
+				// Delegate full package compilation to fontConvert.js
+				const builtFiles = await buildFontPackage({
+					familyName: famName,
+					primaryFiles: {
+						0: regFile,
+						1: inputBold.files[0],
+						2: inputItalic.files[0],
+						3: inputBoldItalic.files[0]
+					},
+					fallbackFamilies,
+					presets: checkedPresets,
+					customIntervalsStr: elCustomIntervals.value.trim(),
+					sizes,
+					darkenAa: elDarkenAa.checked,
+					onProgress: ({percent, message}) => {
+						progressBar.style.width = `${percent}%`;
+						progressPct.innerText = `${percent}%`;
+						progressText.innerText = message;
+					},
+					onLog: ({message, type}) => {
+						log(message, type);
+					}
+				});
 
 				// Show download list
 				elDownloadList.innerHTML = '';
 				builtFiles.forEach(f => {
-					const blob = new Blob([f.data], { type: 'application/octet-stream' });
+					const blob = new Blob([f.data], {type: 'application/octet-stream'});
 					const url = URL.createObjectURL(blob);
-					
+
 					const li = document.createElement('li');
 					li.className = 'flex items-center justify-between py-3';
 					li.innerHTML = `

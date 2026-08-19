@@ -1,5 +1,11 @@
 // Pure JS/Canvas implementation of fontconvert_sdcard.py
 // Ported to run entirely in the browser using opentype.js.
+import opentype from 'https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.module.js';
+import { sanitizeFamilyName } from './fontBuilder.js';
+
+export function parseFont(buffer) {
+	return opentype.parse(buffer);
+}
 
 const STYLE_NAMES = { 0: "regular", 1: "bold", 2: "italic", 3: "bolditalic" };
 
@@ -823,7 +829,7 @@ export async function generateCpfontMultistyle({
 	sortedStyleIds.forEach((styleId, idx) => {
 		const sd = rasterData[styleId];
 		if (sd.advanceY > 255) {
-			throw new Error(`advanceY (${sd.advanceY}) exceeds uint8 range for style {styleId} size {size}`);
+			throw new Error(`advanceY (${sd.advanceY}) exceeds uint8 range for style ${styleId} size ${size}`);
 		}
 		const o = idx * STYLE_TOC_ENTRY_SIZE;
 		tocView.setUint8(o, styleId);
@@ -874,3 +880,124 @@ export async function generateCpfontMultistyle({
 
 	return finalFile;
 }
+
+// Helper to convert File / Blob / Uint8Array / ArrayBuffer to ArrayBuffer
+async function toArrayBuffer(data) {
+	if (!data) return null;
+	if (data instanceof ArrayBuffer) return data;
+	if (data.buffer instanceof ArrayBuffer) return data.buffer;
+	if (data instanceof Blob || (typeof File !== 'undefined' && data instanceof File)) {
+		return await data.arrayBuffer();
+	}
+	throw new Error('Unsupported buffer input format');
+}
+
+/**
+ * High-level orchestration for building .cpfont files from raw file objects.
+ * Handles reading buffers, parsing fonts via opentype, rasterizing sizes, and invoking callbacks.
+ */
+export async function buildFontPackage({
+	familyName,
+	primaryFiles,        // { 0: File|ArrayBuffer, 1: ..., 2: ..., 3: ... }
+	fallbackFamilies = [], // [ { name, files: { 0: ..., 1: ..., 2: ..., 3: ... } }, ... ]
+	presets = [],        // ['reading', 'ipa-chars'] or comma string
+	customIntervalsStr = '',
+	sizes = [12, 14, 16, 18],
+	darkenAa = false,
+	onProgress = () => { },
+	onLog = () => { }
+}) {
+	const sanitizedName = sanitizeFamilyName(familyName);
+
+	// 1. Resolve Unicode Intervals
+	const presetStr = Array.isArray(presets) ? presets.join(',') : (presets || '');
+	const fullIntervalList = presetStr + (customIntervalsStr ? (presetStr ? ',' : '') + customIntervalsStr : '');
+	const resolvedRanges = resolveIntervals(fullIntervalList);
+
+	onLog({
+		message: `Resolved Unicode coverage: merged into ${resolvedRanges.length} continuous interval ranges.`,
+		type: 'info'
+	});
+
+	// 2. Read raw buffers
+	onProgress({ percent: 10, message: 'Reading font files into memory...' });
+	onLog({ message: 'Reading font files into memory...', type: 'info' });
+
+	const styleFontsRaw = {};
+	if (primaryFiles[0]) styleFontsRaw[0] = await toArrayBuffer(primaryFiles[0]);
+	if (primaryFiles[1]) styleFontsRaw[1] = await toArrayBuffer(primaryFiles[1]);
+	if (primaryFiles[2]) styleFontsRaw[2] = await toArrayBuffer(primaryFiles[2]);
+	if (primaryFiles[3]) styleFontsRaw[3] = await toArrayBuffer(primaryFiles[3]);
+
+	if (!styleFontsRaw[0]) {
+		throw new Error('Regular font file (style 0) is required.');
+	}
+
+	const fallbackStyleFontsRaw = {};
+	for (const fam of fallbackFamilies) {
+		for (let sid = 0; sid < 4; sid++) {
+			if (fam.files && fam.files[sid]) {
+				fallbackStyleFontsRaw[sid] = fallbackStyleFontsRaw[sid] || [];
+				fallbackStyleFontsRaw[sid].push(await toArrayBuffer(fam.files[sid]));
+			}
+		}
+	}
+
+	// 3. Parse with opentype
+	onProgress({ percent: 15, message: 'Parsing font OpenType tables...' });
+	onLog({ message: 'Parsing font OpenType tables...', type: 'info' });
+
+	const styleFonts = {};
+	for (const [sid, buf] of Object.entries(styleFontsRaw)) {
+		styleFonts[sid] = parseFont(buf);
+	}
+
+	const fallbackStyleFonts = {};
+	for (const [sid, buffers] of Object.entries(fallbackStyleFontsRaw)) {
+		fallbackStyleFonts[sid] = buffers.map(buf => parseFont(buf));
+	}
+
+	// 4. Build each size
+	const builtFiles = [];
+	const sortedSizes = Array.from(new Set(sizes)).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b);
+	const totalSteps = sortedSizes.length;
+
+	for (let i = 0; i < sortedSizes.length; i++) {
+		const sz = sortedSizes[i];
+		const stepPercent = 15 + Math.round((i / totalSteps) * 80);
+
+		onProgress({
+			percent: stepPercent,
+			message: `Rasterizing size ${sz}pt...`
+		});
+		onLog({
+			message: `Generating ${sanitizedName}_${sz}.cpfont...`,
+			type: 'info'
+		});
+
+		const fileBinary = await generateCpfontMultistyle({
+			styleFonts,
+			size: sz,
+			intervals: resolvedRanges,
+			darkenAa,
+			fallbackStyleFonts
+		});
+
+		const fileName = `${sanitizedName}_${sz}.cpfont`;
+		builtFiles.push({
+			name: fileName,
+			data: fileBinary
+		});
+
+		onLog({
+			message: `Successfully built ${fileName} (${(fileBinary.byteLength / 1024).toFixed(1)} KB)`,
+			type: 'success'
+		});
+	}
+
+	onProgress({ percent: 100, message: 'Done!' });
+	onLog({ message: 'All font files compiled successfully!', type: 'success' });
+
+	return builtFiles;
+}
+

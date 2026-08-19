@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>CrossPoint Font Builder (Local Offline)</title>
+	<!-- Tailwind CSS -->
+	<script src="https://cdn.tailwindcss.com"></script>
+	<!-- opentype.js -->
+	<script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
+	<style>
+		.dot-field {
+			background-image: radial-gradient(rgba(120, 119, 198, 0.1) 1px, transparent 1px);
+			background-size: 16px 16px;
+		}
+	</style>
+</head>
+
+<body class="bg-stone-50 text-stone-900 font-sans antialiased min-h-screen">
+
+	<!-- Header Section -->
+	<header class="relative overflow-hidden border-b border-stone-200 bg-white">
+		<div aria-hidden="true"
+			class="pointer-events-none absolute inset-0 dot-field [mask-image:radial-gradient(110%_100%_at_50%_0%,black,transparent_70%)]">
+		</div>
+		<div class="relative mx-auto max-w-4xl px-6 py-12 text-center">
+			<span
+				class="inline-flex items-center rounded-full bg-brand-50 bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600 ring-1 ring-stone-200">
+				100% Offline Generation
+			</span>
+			<h1 class="mt-4 font-serif text-4xl font-bold tracking-tight text-stone-900 sm:text-5xl">
+				CrossPoint Font Builder
+			</h1>
+			<p class="mt-4 mx-auto max-w-2xl text-base text-stone-600 leading-relaxed">
+				Convert TrueType (<code class="bg-stone-100 px-1 rounded text-sm">.ttf</code>) or OpenType (<code
+					class="bg-stone-100 px-1 rounded text-sm">.otf</code>) fonts to CrossPoint's
+				<code class="bg-stone-100 px-1 rounded text-sm font-semibold">.cpfont</code> format directly in your
+				browser.
+				Includes full GPOS kerning, GSUB ligatures, and custom fallback chains.
+			</p>
+		</div>
+	</header>
+
+	<!-- Main Container -->
+	<main class="mx-auto max-w-4xl px-6 py-10">
+		<div class="bg-white rounded-2xl p-6 shadow-sm border border-stone-200/80 sm:p-8">
+
+			<!-- Font Family Name -->
+			<div class="mb-6">
+				<label for="familyName" class="block text-sm font-medium text-stone-700">Font Family Name</label>
+				<input type="text" id="familyName" placeholder="e.g. Literata"
+					class="mt-1.5 block w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 shadow-sm placeholder:text-stone-400 focus:border-stone-500 focus:ring-1 focus:ring-stone-500 focus:outline-none">
+				<p class="mt-1.5 text-xs text-stone-400">Letters, numbers, spaces, and dashes. Shown on the reader as
+					one font family.</p>
+			</div>
+
+			<!-- Quick Folder Add -->
+			<div class="mb-6">
+				<label class="block text-sm font-medium text-stone-700">Quick add from folder</label>
+				<p class="mt-1 text-xs text-stone-400">Select all font files at once. Styles are detected from filenames
+					(e.g. Font-Bold.ttf, Font-Regular.otf).</p>
+				<input type="file" id="fontFolder" accept=".ttf,.otf,.TTF,.OTF" webkitdirectory
+					class="mt-2 block w-full text-sm text-stone-500 file:mr-3 file:rounded-md file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-stone-700 hover:file:bg-stone-200 cursor-pointer">
+				<div id="autoDetectResult"
+					class="hidden mt-2 rounded-lg bg-stone-50 border border-stone-200 px-3 py-2 font-mono text-xs whitespace-pre-wrap text-stone-600">
+				</div>
+			</div>
+
+			<div class="relative my-6">
+				<div class="absolute inset-0 flex items-center">
+					<div class="w-full border-t border-stone-200"></div>
+				</div>
+				<div class="relative flex justify-center">
+					<span class="bg-white px-3 font-mono text-[10px] tracking-widest text-stone-400 uppercase">or pick
+						files individually</span>
+				</div>
+			</div>
+
+			<!-- Individual Files -->
+			<div class="grid gap-4 sm:grid-cols-2 mb-6">
+				<div>
+					<label class="block text-sm font-medium text-stone-700">Regular <span
+							class="text-red-500">*</span></label>
+					<input type="file" id="fontRegular" accept=".ttf,.otf,.TTF,.OTF"
+						class="mt-1.5 block w-full text-sm text-stone-500 file:mr-3 file:rounded-md file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-stone-700 hover:file:bg-stone-200 cursor-pointer">
+				</div>
+				<div>
+					<label class="block text-sm font-medium text-stone-700">Bold <span
+							class="text-xs text-stone-400">(optional)</span></label>
+					<input type="file" id="fontBold" accept=".ttf,.otf,.TTF,.OTF"
+						class="mt-1.5 block w-full text-sm text-stone-500 file:mr-3 file:rounded-md file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-stone-700 hover:file:bg-stone-200 cursor-pointer">
+				</div>
+				<div>
+					<label class="block text-sm font-medium text-stone-700">Italic <span
+							class="text-xs text-stone-400">(optional)</span></label>
+					<input type="file" id="fontItalic" accept=".ttf,.otf,.TTF,.OTF"
+						class="mt-1.5 block w-full text-sm text-stone-500 file:mr-3 file:rounded-md file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-stone-700 hover:file:bg-stone-200 cursor-pointer">
+				</div>
+				<div>
+					<label class="block text-sm font-medium text-stone-700">Bold Italic <span
+							class="text-xs text-stone-400">(optional)</span></label>
+					<input type="file" id="fontBoldItalic" accept=".ttf,.otf,.TTF,.OTF"
+						class="mt-1.5 block w-full text-sm text-stone-500 file:mr-3 file:rounded-md file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-stone-700 hover:file:bg-stone-200 cursor-pointer">
+				</div>
+			</div>
+
+			<!-- Fallback Font Families -->
+			<div class="mt-8 border border-dashed border-stone-300 bg-stone-50/50 rounded-2xl p-5 mb-6">
+				<div class="flex flex-wrap items-center gap-2">
+					<h3 class="text-sm font-semibold text-stone-900">Fallback Font Families</h3>
+					<span
+						class="inline-flex items-center rounded-full bg-white px-2.5 py-0.5 text-[10px] font-medium text-stone-600 ring-1 ring-stone-200">Optional</span>
+				</div>
+				<p class="mt-1.5 text-xs text-stone-500">
+					Upload fallback families to fill character/glyph gaps in your main family. Fallbacks are checked in
+					the order they appear.
+				</p>
+
+				<!-- Fallback List Container -->
+				<div id="fallbackList" class="space-y-4"></div>
+
+				<!-- Add Button -->
+				<button type="button" id="btnAddFallback"
+					class="mt-4 bg-white border border-stone-300 hover:bg-stone-50 text-stone-750 font-medium text-xs py-2 px-4 rounded-lg transition shadow-sm active:scale-[0.98]">
+					Add Fallback Family
+				</button>
+			</div>
+
+			<!-- Additional Unicode Coverage Presets -->
+			<div class="mb-6">
+				<label class="block text-sm font-medium text-stone-700">Additional Unicode Coverage</label>
+				<p class="mt-1 text-xs text-stone-400">ASCII / Basic Latin + general reading punctuation is always
+					included. Choose extra scripts below.</p>
+
+				<div id="presetsList"
+					class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 text-sm text-stone-700">
+					<!-- Populated by JS -->
+				</div>
+
+				<div class="mt-4">
+					<label for="customIntervals" class="block text-xs font-medium text-stone-600">Additional custom
+						ranges (optional)</label>
+					<input type="text" id="customIntervals" placeholder="(0x2900-0x29FF),(0x2E00-0x2EFF)"
+						class="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-1.5 font-mono text-xs text-stone-900 shadow-sm placeholder:text-stone-400 focus:border-stone-500 focus:outline-none">
+				</div>
+			</div>
+
+			<!-- Font Sizes -->
+			<div class="mb-6">
+				<label class="block text-sm font-medium text-stone-700">Font Sizes (pt)</label>
+				<p class="mt-1 text-xs text-stone-400">Specify four sizes for reader levels: Small, Medium, Large, Extra
+					Large.</p>
+				<div class="mt-2 grid grid-cols-4 gap-3">
+					<div>
+						<label class="block font-mono text-[10px] text-stone-500 uppercase">Small</label>
+						<input type="number" id="size0" value="12" min="8" max="48"
+							class="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-1 text-center text-sm">
+					</div>
+					<div>
+						<label class="block font-mono text-[10px] text-stone-500 uppercase">Medium</label>
+						<input type="number" id="size1" value="14" min="8" max="48"
+							class="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-1 text-center text-sm">
+					</div>
+					<div>
+						<label class="block font-mono text-[10px] text-stone-500 uppercase">Large</label>
+						<input type="number" id="size2" value="16" min="8" max="48"
+							class="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-1 text-center text-sm">
+					</div>
+					<div>
+						<label class="block font-mono text-[10px] text-stone-500 uppercase">X-Large</label>
+						<input type="number" id="size3" value="18" min="8" max="48"
+							class="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-1 text-center text-sm">
+					</div>
+				</div>
+			</div>
+
+			<!-- UI Sizes Container -->
+			<div id="uiSizesContainer" class="mb-6">
+				<label class="block text-sm font-medium text-stone-700">UI Font Sizes (pt)</label>
+				<p class="mt-1 max-w-[42rem] text-xs text-stone-400">
+					CrossPoint's built-in UI fonts (menus, book titles) are Latin-only and come in 8, 10, and 12 pt.
+					These two extra sizes are generated so the reader can draw UI text with matching same-size fonts
+					from this family. The 12 pt UI size is served by the Small reader size — keep Small at 12 pt for
+					full coverage.
+				</p>
+				<div class="mt-2 grid grid-cols-4 gap-3">
+					<div>
+						<label class="block font-mono text-[10px] text-stone-500 uppercase">UI Small</label>
+						<input type="number" id="uiSize0" value="8" min="6" max="16"
+							class="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-1 text-center text-sm">
+					</div>
+					<div>
+						<label class="block font-mono text-[10px] text-stone-500 uppercase">UI Medium</label>
+						<input type="number" id="uiSize1" value="10" min="6" max="16"
+							class="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-1 text-center text-sm">
+					</div>
+				</div>
+			</div>
+
+			<!-- Darken AA Checkbox -->
+			<div class="mb-6">
+				<label class="flex items-center gap-2 text-sm text-stone-700 font-medium">
+					<input type="checkbox" id="darkenAa" checked class="rounded border-stone-300 accent-stone-700">
+					Darken Anti-Aliasing (Highly Recommended)
+				</label>
+				<p class="mt-1 text-xs text-stone-400 ml-5">
+					Uses darker thresholds for 2-bit grayscale output, matching CrossPoint's built-in fonts (Bitter,
+					Lexend Deca). Keeps text legible on E-ink.
+				</p>
+			</div>
+
+			<!-- Action Button & Progress -->
+			<div class="mt-8 pt-6 border-t border-stone-100">
+				<button id="btnBuild"
+					class="w-full bg-stone-900 hover:bg-stone-850 text-white py-3 px-4 rounded-xl font-medium shadow-sm transition active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed">
+					Build Fonts locally
+				</button>
+
+				<!-- Progress Indicator -->
+				<div id="progressContainer" class="hidden mt-6">
+					<div class="flex justify-between text-xs text-stone-500 mb-1.5 font-medium">
+						<span id="progressText">Starting builder...</span>
+						<span id="progressPct">0%</span>
+					</div>
+					<div class="w-full bg-stone-100 rounded-full h-2">
+						<div id="progressBar" class="bg-stone-900 h-2 rounded-full transition-all duration-300"
+							style="width: 0%"></div>
+					</div>
+				</div>
+
+				<!-- Terminal Log Output -->
+				<div id="logContainer" class="hidden mt-6">
+					<div class="flex justify-between items-center text-xs font-semibold text-stone-600 mb-2">
+						<span>Process Logs</span>
+						<button id="btnClearLogs" class="text-stone-400 hover:text-stone-600">Clear</button>
+					</div>
+					<div id="logConsole"
+						class="bg-stone-900 text-stone-200 font-mono text-[11px] p-4 rounded-xl max-h-60 overflow-y-auto whitespace-pre-wrap leading-relaxed shadow-inner">
+					</div>
+				</div>
+
+				<!-- Download Section -->
+				<div id="downloadContainer" class="hidden mt-6 p-5 border border-stone-200 bg-stone-50 rounded-xl">
+					<div class="flex items-center justify-between border-b border-stone-200 pb-3">
+						<div>
+							<h4 class="text-sm font-semibold text-stone-800">Generated Files</h4>
+							<p class="text-xs text-stone-500 mt-0.5">Ready to load directly onto your device's SD Card.</p>
+						</div>
+					</div>
+					<ul id="downloadList" class="mt-3 divide-y divide-stone-100"></ul>
+				</div>
+
+			</div>
+
+		</div>
+	</main>
+
+	<footer class="text-center py-10 text-xs text-stone-400 border-t border-stone-200/50 bg-white">
+		<p>Powered entirely by browser-side canvas rendering and opentype.js.</p>
+	</footer>
+
+	<!-- App Main Entry Module -->
+	<script type="module">
+		import {analyzeFontFolder, setFileInput, INTERVAL_PRESETS, sanitizeFamilyName, CJK_PRESET_VALUES, customIntervalsContainCjk} from './fontBuilder.js';
+		import {generateCpfontMultistyle, resolveIntervals} from './fontConvert.js';
+
+		// Populate Presets in DOM
+		const presetsList = document.getElementById('presetsList');
+		INTERVAL_PRESETS.forEach(p => {
+			const label = document.createElement('label');
+			label.className = 'flex items-center gap-2 cursor-pointer';
+
+			const checkbox = document.createElement('input');
+			checkbox.type = 'checkbox';
+			checkbox.name = 'intervalPreset';
+			checkbox.value = p.value;
+			checkbox.checked = !!p.defaultChecked;
+			checkbox.className = 'rounded border-stone-300 accent-stone-700';
+
+			label.appendChild(checkbox);
+			label.appendChild(document.createTextNode(p.label));
+
+			if (p.note) {
+				const note = document.createElement('span');
+				note.className = 'text-[10px] text-stone-400 font-normal ml-0.5';
+				note.innerText = p.note;
+				label.appendChild(note);
+			}
+
+			presetsList.appendChild(label);
+		});
+
+		// Elements
+		const elFolder = document.getElementById('fontFolder');
+		const elAutoDetectResult = document.getElementById('autoDetectResult');
+		const elFamilyName = document.getElementById('familyName');
+
+		const inputRegular = document.getElementById('fontRegular');
+		const inputBold = document.getElementById('fontBold');
+		const inputItalic = document.getElementById('fontItalic');
+		const inputBoldItalic = document.getElementById('fontBoldItalic');
+
+		const elFallbackList = document.getElementById('fallbackList');
+		const btnAddFallback = document.getElementById('btnAddFallback');
+
+		const elCustomIntervals = document.getElementById('customIntervals');
+		const elUiSizesContainer = document.getElementById('uiSizesContainer');
+		const inputUiSize0 = document.getElementById('uiSize0');
+		const inputUiSize1 = document.getElementById('uiSize1');
+		const elDarkenAa = document.getElementById('darkenAa');
+		const btnBuild = document.getElementById('btnBuild');
+
+		const progressContainer = document.getElementById('progressContainer');
+		const progressText = document.getElementById('progressText');
+		const progressPct = document.getElementById('progressPct');
+		const progressBar = document.getElementById('progressBar');
+
+		const logContainer = document.getElementById('logContainer');
+		const logConsole = document.getElementById('logConsole');
+		const btnClearLogs = document.getElementById('btnClearLogs');
+
+		const downloadContainer = document.getElementById('downloadContainer');
+		const elDownloadList = document.getElementById('downloadList');
+
+		let builtFiles = []; // Array of { name, blob }
+
+		// Logs helper
+		function log(msg, type = 'info') {
+			logContainer.classList.remove('hidden');
+			const prefix = `[${new Date().toLocaleTimeString()}] `;
+			let colorClass = 'text-stone-300';
+			if (type === 'success') colorClass = 'text-emerald-400 font-semibold';
+			if (type === 'error') colorClass = 'text-rose-400 font-bold';
+
+			const div = document.createElement('div');
+			div.className = colorClass;
+			div.innerText = prefix + msg;
+			logConsole.appendChild(div);
+			logConsole.scrollTop = logConsole.scrollHeight;
+		}
+
+		btnClearLogs.addEventListener('click', () => {
+			logConsole.innerHTML = '';
+		});
+
+
+
+		// Folder select
+		elFolder.addEventListener('change', (e) => {
+			const analysis = analyzeFontFolder(e.target.files);
+			if (!analysis) return;
+			const {result, familyName, otherFamilies} = analysis;
+
+			console.log('Font Builder Auto-Detect Result:', result);
+			console.log('Main file inputs:', {inputRegular, inputBold, inputItalic, inputBoldItalic});
+
+			setFileInput(inputRegular, result.regular);
+			setFileInput(inputBold, result.bold);
+			setFileInput(inputItalic, result.italic);
+			setFileInput(inputBoldItalic, result.bolditalic);
+
+			if (familyName) {
+				elFamilyName.value = familyName.replace(/[-_]/g, ' ');
+			}
+
+			const lines = [];
+			if (result.regular) lines.push('Regular: ' + result.regular.name);
+			if (result.bold) lines.push('Bold: ' + result.bold.name);
+			if (result.italic) lines.push('Italic: ' + result.italic.name);
+			if (result.bolditalic) lines.push('Bold Italic: ' + result.bolditalic.name);
+			if (otherFamilies.length) {
+				lines.push('Other families found: ' + otherFamilies.join(', '));
+			}
+
+			elAutoDetectResult.innerText = lines.join('\n');
+			elAutoDetectResult.classList.remove('hidden');
+		});
+
+		let fallbackCounter = 0;
+
+		// Helper to auto-extract family name from manual file selects
+		function extractFamilyNameFromFile(file) {
+			if (!file) return '';
+			const stem = file.name.replace(/\.(ttf|otf)$/i, '');
+			const cleanStem = stem.replace(/[-_ ]?(regular|bold|italic|bolditalic|normal|book|roman|medium|Rg|Bd|It|bi|thin|hairline|light|black|heavy|semibold|demibold|extrabold|ultrabold)$/i, '');
+			return cleanStem.replace(/[-_]/g, ' ');
+		}
+
+		function renameFallbackHeaders() {
+			const rows = elFallbackList.querySelectorAll('.fallback-row');
+			rows.forEach((row, index) => {
+				const num = index + 1;
+				row.dataset.id = num;
+				row.querySelector('.fallback-header-label').innerText = `Fallback Family ${num} Name`;
+				row.querySelector('.fallback-folder-label').innerText = `Quick add fallback family ${num} from folder`;
+
+				// update style labels
+				row.querySelector('.fallback-regular').closest('div').querySelector('label').innerHTML = `Fallback ${num} Regular <span class="text-stone-400">(optional)</span>`;
+				row.querySelector('.fallback-bold').closest('div').querySelector('label').innerHTML = `Fallback ${num} Bold <span class="text-stone-400">(optional)</span>`;
+				row.querySelector('.fallback-italic').closest('div').querySelector('label').innerHTML = `Fallback ${num} Italic <span class="text-stone-400">(optional)</span>`;
+				row.querySelector('.fallback-bolditalic').closest('div').querySelector('label').innerHTML = `Fallback ${num} Bold Italic <span class="text-stone-400">(optional)</span>`;
+			});
+		}
+
+		function createFallbackRow() {
+			fallbackCounter++;
+			const id = fallbackCounter;
+
+			const row = document.createElement('div');
+			row.className = 'fallback-row mt-4 rounded-xl border border-stone-200 bg-white p-4 relative';
+			row.dataset.id = id;
+
+			row.innerHTML = `
+        <button type="button" class="btn-remove-fallback absolute top-3 right-3 text-stone-400 hover:text-rose-500 text-xs font-semibold">
+          Remove
+        </button>
+        <div class="pr-12">
+          <label class="fallback-header-label block text-xs font-semibold text-stone-700 text-stone-600">Fallback Family ${id} Name</label>
+          <input type="text" class="fallback-name mt-1.5 block w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-900 shadow-sm placeholder:text-stone-400 focus:border-stone-500 focus:ring-1 focus:ring-stone-500 focus:outline-none" placeholder="e.g. Noto Sans Symbols">
+        </div>
+        
+        <label class="fallback-folder-label block text-xs font-medium text-stone-600 mt-3">Quick add fallback family ${id} from folder</label>
+        <input type="file" class="fallback-folder mt-1 block w-full text-sm text-stone-500 file:mr-3 file:rounded-md file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-stone-700 hover:file:bg-stone-200 cursor-pointer" accept=".ttf,.otf,.TTF,.OTF" webkitdirectory>
+        <div class="fallback-autodetect-result hidden mt-2 rounded-lg bg-stone-50 border border-stone-200 px-3 py-2 font-mono text-xs whitespace-pre-wrap text-stone-600"></div>
+
+        <div class="grid gap-3 sm:grid-cols-2 mt-4 text-stone-650">
+          <div>
+            <label class="block text-[11px] font-medium text-stone-600">Fallback ${id} Regular <span class="text-stone-400">(optional)</span></label>
+            <input type="file" class="fallback-regular mt-1 block w-full text-xs text-stone-500 file:mr-2 file:rounded file:border-0 file:bg-stone-100 file:px-2.5 file:py-1 file:text-xs file:font-medium file:text-stone-700 hover:file:bg-stone-200 cursor-pointer" accept=".ttf,.otf,.TTF,.OTF">
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-stone-600">Fallback ${id} Bold <span class="text-stone-400">(optional)</span></label>
+            <input type="file" class="fallback-bold mt-1 block w-full text-xs text-stone-500 file:mr-2 file:rounded file:border-0 file:bg-stone-100 file:px-2.5 file:py-1 file:text-xs file:font-medium file:text-stone-700 hover:file:bg-stone-200 cursor-pointer" accept=".ttf,.otf,.TTF,.OTF">
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-stone-600">Fallback ${id} Italic <span class="text-stone-400">(optional)</span></label>
+            <input type="file" class="fallback-italic mt-1 block w-full text-xs text-stone-500 file:mr-2 file:rounded file:border-0 file:bg-stone-100 file:px-2.5 file:py-1 file:text-xs file:font-medium file:text-stone-700 hover:file:bg-stone-200 cursor-pointer" accept=".ttf,.otf,.TTF,.OTF">
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-stone-600">Fallback ${id} Bold Italic <span class="text-stone-400">(optional)</span></label>
+            <input type="file" class="fallback-bolditalic mt-1 block w-full text-xs text-stone-500 file:mr-2 file:rounded file:border-0 file:bg-stone-100 file:px-2.5 file:py-1 file:text-xs file:font-medium file:text-stone-700 hover:file:bg-stone-200 cursor-pointer" accept=".ttf,.otf,.TTF,.OTF">
+          </div>
+        </div>
+      `;
+
+			const elName = row.querySelector('.fallback-name');
+			const elFolderInput = row.querySelector('.fallback-folder');
+			const elAutoResult = row.querySelector('.fallback-autodetect-result');
+			const elRegular = row.querySelector('.fallback-regular');
+			const elBold = row.querySelector('.fallback-bold');
+			const elItalic = row.querySelector('.fallback-italic');
+			const elBoldItalic = row.querySelector('.fallback-bolditalic');
+			const btnRemove = row.querySelector('.btn-remove-fallback');
+
+			elFolderInput.addEventListener('change', (e) => {
+				const analysis = analyzeFontFolder(e.target.files);
+				if (!analysis) return;
+				const {result, familyName} = analysis;
+
+				setFileInput(elRegular, result.regular);
+				setFileInput(elBold, result.bold);
+				setFileInput(elItalic, result.italic);
+				setFileInput(elBoldItalic, result.bolditalic);
+
+				if (familyName) {
+					elName.value = familyName.replace(/[-_]/g, ' ');
+				}
+
+				const lines = [];
+				if (result.regular) lines.push('Regular: ' + result.regular.name);
+				if (result.bold) lines.push('Bold: ' + result.bold.name);
+				if (result.italic) lines.push('Italic: ' + result.italic.name);
+				if (result.bolditalic) lines.push('Bold Italic: ' + result.bolditalic.name);
+
+				elAutoResult.innerText = lines.join('\n');
+				elAutoResult.classList.remove('hidden');
+			});
+
+			elRegular.addEventListener('change', (e) => {
+				if (!elName.value.trim() && e.target.files[0]) {
+					elName.value = extractFamilyNameFromFile(e.target.files[0]);
+				}
+			});
+
+			btnRemove.addEventListener('click', () => {
+				row.remove();
+				renameFallbackHeaders();
+			});
+
+			return row;
+		}
+
+		btnAddFallback.addEventListener('click', () => {
+			elFallbackList.appendChild(createFallbackRow());
+			renameFallbackHeaders();
+		});
+
+		inputRegular.addEventListener('change', (e) => {
+			if (!elFamilyName.value.trim() && e.target.files[0]) {
+				elFamilyName.value = extractFamilyNameFromFile(e.target.files[0]);
+			}
+		});
+
+		// Helper to read File into ArrayBuffer
+		function readFileAsArrayBuffer(file) {
+			return new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(reader.result);
+				reader.onerror = () => reject(reader.error);
+				reader.readAsArrayBuffer(file);
+			});
+		}
+
+		// Main Build Action
+		btnBuild.addEventListener('click', async () => {
+			// Validate
+			const regFile = inputRegular.files[0];
+			if (!regFile) {
+				alert('Please select a Regular font file.');
+				return;
+			}
+			const famName = elFamilyName.value.trim();
+			if (!famName) {
+				alert('Please enter a font family name.');
+				return;
+			}
+
+			// Check fallback definitions
+			// Validate dynamic fallback rows
+			const fallbackRows = Array.from(elFallbackList.querySelectorAll('.fallback-row'));
+			const fallbackData = [];
+
+			for (let i = 0; i < fallbackRows.length; i++) {
+				const row = fallbackRows[i];
+				const idx = i + 1;
+				const name = row.querySelector('.fallback-name').value.trim();
+
+				const fileReg = row.querySelector('.fallback-regular').files[0];
+				const fileBold = row.querySelector('.fallback-bold').files[0];
+				const fileItal = row.querySelector('.fallback-italic').files[0];
+				const fileBI = row.querySelector('.fallback-bolditalic').files[0];
+
+				const hasFiles = fileReg || fileBold || fileItal || fileBI;
+
+				if (hasFiles && !name) {
+					alert(`Please enter a name for Fallback Family ${idx}.`);
+					return;
+				}
+				if (name && !hasFiles) {
+					alert(`Please select at least one font file for Fallback Family ${idx}.`);
+					return;
+				}
+
+				if (name) {
+					fallbackData.push({
+						name,
+						files: {0: fileReg, 1: fileBold, 2: fileItal, 3: fileBI}
+					});
+				}
+			}
+
+			// Start build state
+			btnBuild.disabled = true;
+			downloadContainer.classList.add('hidden');
+			progressContainer.classList.remove('hidden');
+			progressBar.style.width = '5%';
+			progressPct.innerText = '5%';
+			progressText.innerText = 'Initializing...';
+
+			logConsole.innerHTML = '';
+			log('Font convert process started locally.');
+
+			try {
+				// Resolve intervals / scripts
+				const checkedPresets = Array.from(document.querySelectorAll('input[name="intervalPreset"]:checked'))
+					.map(cb => cb.value);
+				const custom = elCustomIntervals.value.trim();
+				const intervalList = checkedPresets.join(',') + (custom ? ',' + custom : '');
+				const resolvedRanges = resolveIntervals(intervalList);
+
+				log(`Resolved Unicode coverage. Merged into ${resolvedRanges.length} continuous interval ranges.`);
+
+				// Sizes
+				const sizes = [
+					parseInt(document.getElementById('size0').value) || 12,
+					parseInt(document.getElementById('size1').value) || 14,
+					parseInt(document.getElementById('size2').value) || 16,
+					parseInt(document.getElementById('size3').value) || 18,
+				];
+
+				const uiSize0 = parseInt(inputUiSize0.value) || 8;
+				const uiSize1 = parseInt(inputUiSize1.value) || 10;
+				if (!sizes.includes(uiSize0)) sizes.push(uiSize0);
+				if (!sizes.includes(uiSize1)) sizes.push(uiSize1);
+				sizes.sort((a, b) => a - b);
+
+				log(`Generating for sizes: ${sizes.join(', ')} pt.`);
+
+				// Load files into ArrayBuffers
+				progressText.innerText = 'Reading font files...';
+				progressBar.style.width = '15%';
+				progressPct.innerText = '15%';
+				log('Loading files into browser memory...');
+
+				const regBuffer = await readFileAsArrayBuffer(regFile);
+				const styleFontsRaw = {0: regBuffer};
+
+				const boldFile = inputBold.files[0];
+				if (boldFile) styleFontsRaw[1] = await readFileAsArrayBuffer(boldFile);
+
+				const italicFile = inputItalic.files[0];
+				if (italicFile) styleFontsRaw[2] = await readFileAsArrayBuffer(italicFile);
+
+				const boldItalicFile = inputBoldItalic.files[0];
+				if (boldItalicFile) styleFontsRaw[3] = await readFileAsArrayBuffer(boldItalicFile);
+
+				const fallbackStyleFontsRaw = {};
+
+				async function addFallbackRaw(styleId, file) {
+					if (!file) return;
+					fallbackStyleFontsRaw[styleId] = fallbackStyleFontsRaw[styleId] || [];
+					fallbackStyleFontsRaw[styleId].push(await readFileAsArrayBuffer(file));
+				}
+
+				// Load all fallback files dynamically
+				for (const data of fallbackData) {
+					await addFallbackRaw(0, data.files[0]);
+					await addFallbackRaw(1, data.files[1]);
+					await addFallbackRaw(2, data.files[2]);
+					await addFallbackRaw(3, data.files[3]);
+				}
+
+				// Parse fonts with opentype.js
+				log('Parsing font OpenType tables...');
+				const styleFonts = {};
+				for (const [sid, buf] of Object.entries(styleFontsRaw)) {
+					styleFonts[sid] = opentype.parse(buf);
+				}
+
+				const fallbackStyleFonts = {};
+				for (const [sid, buffers] of Object.entries(fallbackStyleFontsRaw)) {
+					fallbackStyleFonts[sid] = buffers.map(buf => opentype.parse(buf));
+				}
+
+				builtFiles = [];
+				const totalSteps = sizes.length;
+				const darken = elDarkenAa.checked;
+
+				// Build each size
+				for (let i = 0; i < sizes.length; i++) {
+					const sz = sizes[i];
+					const stepPercent = 15 + Math.round((i / totalSteps) * 75);
+					progressBar.style.width = `${stepPercent}%`;
+					progressPct.innerText = `${stepPercent}%`;
+					progressText.innerText = `Rasterizing size ${sz}pt...`;
+
+					log(`Generating ${famName}_${sz}.cpfont...`);
+
+					const fileBinary = await generateCpfontMultistyle({
+						styleFonts,
+						size: sz,
+						intervals: resolvedRanges,
+						darkenAa: darken,
+						fallbackStyleFonts
+					});
+
+					builtFiles.push({
+						name: `${sanitizeFamilyName(famName)}_${sz}.cpfont`,
+						data: fileBinary
+					});
+
+					log(`Successfully built ${famName}_${sz}.cpfont (${(fileBinary.byteLength / 1024).toFixed(1)} KB)`, 'success');
+				}
+
+				progressBar.style.width = '100%';
+				progressPct.innerText = '100%';
+				progressText.innerText = 'Done!';
+				log('All font files compiled successfully!', 'success');
+
+				// Show download list
+				elDownloadList.innerHTML = '';
+				builtFiles.forEach(f => {
+					const blob = new Blob([f.data], { type: 'application/octet-stream' });
+					const url = URL.createObjectURL(blob);
+					
+					const li = document.createElement('li');
+					li.className = 'flex items-center justify-between py-3';
+					li.innerHTML = `
+						<span class="font-mono text-sm font-medium text-stone-900">${f.name}</span>
+						<a href="${url}" download="${f.name}" class="rounded-lg px-3 py-1.5 text-xs font-semibold text-stone-700 bg-white border border-stone-200 shadow-sm hover:bg-stone-50 transition active:scale-[0.98]">
+							Download
+						</a>
+					`;
+					elDownloadList.appendChild(li);
+				});
+
+				downloadContainer.classList.remove('hidden');
+
+			} catch (err) {
+				log(`Fatal build error: ${err.message}`, 'error');
+				console.error(err);
+				progressText.innerText = 'Error occurred';
+				progressBar.style.width = '0%';
+				progressPct.innerText = '0%';
+			} finally {
+				btnBuild.disabled = false;
+			}
+		});
+
+	</script>
+</body>
+
+</html>

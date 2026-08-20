@@ -87,12 +87,6 @@ export function sanitizeFamilyName(name) {
 	return (name || 'CustomFont').replace(/[^A-Za-z0-9_-]+/g, '')
 }
 
-export function formatSize(bytes) {
-	if (bytes < 1024) return bytes + ' B'
-	if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-	return (bytes / 1024 / 1024).toFixed(2) + ' MB'
-}
-
 export const INTERVAL_PRESETS = [
 	{ value: 'reading', label: 'Reading', note: '(Fiction)', defaultChecked: true },
 	{ value: 'default', label: 'Default', note: '(CrossPoint)' },
@@ -118,8 +112,6 @@ export const INTERVAL_PRESETS = [
 ]
 
 export const CJK_PRESET_VALUES = ['hangul', 'cjk-sc', 'cjk-tc', 'cjk-jp']
-
-export const DEFAULT_UI_SIZES = ['8', '10']
 
 const CJK_BLOCKS = [
 	[0x1100, 0x11ff],

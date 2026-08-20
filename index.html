@@ -174,7 +174,7 @@
 			</div>
 
 			<!-- UI Sizes Container -->
-			<div id="uiSizesContainer" class="mb-6">
+			<div id="uiSizesContainer" class="mb-6 hidden">
 				<label class="block text-sm font-medium text-stone-700">UI Font Sizes (pt)</label>
 				<p class="mt-1 max-w-[42rem] text-xs text-stone-400">
 					CrossPoint's built-in UI fonts (menus, book titles) are Latin-only and come in 8, 10, and 12 pt.
@@ -262,7 +262,6 @@
 	<!-- App Main Entry Module -->
 	<script type="module">
 		import {analyzeFontFolder, setFileInput, INTERVAL_PRESETS, sanitizeFamilyName, CJK_PRESET_VALUES, customIntervalsContainCjk} from './fontBuilder.js';
-		import {buildFontPackage} from './fontConvert.js';
 
 		// Populate Presets in DOM
 		const presetsList = document.getElementById('presetsList');
@@ -384,20 +383,29 @@
 		});
 
 		let fallbackCounter = 0;
+		let activeBlobUrls = [];
 
 		function renameFallbackHeaders() {
 			const rows = elFallbackList.querySelectorAll('.fallback-row');
 			rows.forEach((row, index) => {
 				const num = index + 1;
 				row.dataset.id = num;
-				row.querySelector('.fallback-header-label').innerText = `Fallback Family ${num} Name`;
-				row.querySelector('.fallback-folder-label').innerText = `Quick add fallback family ${num} from folder`;
+				row.querySelector('.fallback-header-label').textContent = `Fallback Family ${num} Name`;
+				row.querySelector('.fallback-folder-label').textContent = `Quick add fallback family ${num} from folder`;
 
-				// update style labels
-				row.querySelector('.fallback-regular').closest('div').querySelector('label').innerHTML = `Fallback ${num} Regular <span class="text-stone-400">(optional)</span>`;
-				row.querySelector('.fallback-bold').closest('div').querySelector('label').innerHTML = `Fallback ${num} Bold <span class="text-stone-400">(optional)</span>`;
-				row.querySelector('.fallback-italic').closest('div').querySelector('label').innerHTML = `Fallback ${num} Italic <span class="text-stone-400">(optional)</span>`;
-				row.querySelector('.fallback-bolditalic').closest('div').querySelector('label').innerHTML = `Fallback ${num} Bold Italic <span class="text-stone-400">(optional)</span>`;
+				const setStyleLabel = (selector, styleName) => {
+					const label = row.querySelector(selector).closest('div').querySelector('label');
+					label.textContent = `Fallback ${num} ${styleName} `;
+					const span = document.createElement('span');
+					span.className = 'text-stone-400';
+					span.textContent = '(optional)';
+					label.appendChild(span);
+				};
+
+				setStyleLabel('.fallback-regular', 'Regular');
+				setStyleLabel('.fallback-bold', 'Bold');
+				setStyleLabel('.fallback-italic', 'Italic');
+				setStyleLabel('.fallback-bolditalic', 'Bold Italic');
 			});
 		}
 
@@ -493,19 +501,25 @@
 			renameFallbackHeaders();
 		});
 
-		// Dynamic UI sizes toggle on CJK presets
+		// Dynamic UI sizes toggle on CJK presets (listen on change and input)
+		function updateCjkUiToggle() {
+			const checkedPresets = Array.from(document.querySelectorAll('input[name="intervalPreset"]:checked')).map(cb => cb.value);
+			const hasCjkPreset = checkedPresets.some(p => CJK_PRESET_VALUES.includes(p));
+			const hasCjkCustom = customIntervalsContainCjk(elCustomIntervals.value);
+			if (hasCjkPreset || hasCjkCustom) {
+				elUiSizesContainer.classList.remove('hidden');
+			} else {
+				elUiSizesContainer.classList.add('hidden');
+			}
+		}
+
 		document.addEventListener('change', (e) => {
 			if (e.target.name === 'intervalPreset' || e.target.id === 'customIntervals') {
-				const checkedPresets = Array.from(document.querySelectorAll('input[name="intervalPreset"]:checked')).map(cb => cb.value);
-				const hasCjkPreset = checkedPresets.some(p => CJK_PRESET_VALUES.includes(p));
-				const hasCjkCustom = customIntervalsContainCjk(elCustomIntervals.value);
-				if (hasCjkPreset || hasCjkCustom) {
-					elUiSizesContainer.classList.remove('hidden');
-				} else {
-					elUiSizesContainer.classList.add('hidden');
-				}
+				updateCjkUiToggle();
 			}
 		});
+
+		elCustomIntervals.addEventListener('input', updateCjkUiToggle);
 
 		// Main Build Action
 		btnBuild.addEventListener('click', async () => {
@@ -515,11 +529,12 @@
 				alert('Please select a Regular font file.');
 				return;
 			}
-			const famName = elFamilyName.value.trim();
-			if (!famName) {
+			const rawFamName = elFamilyName.value.trim();
+			if (!rawFamName) {
 				alert('Please enter a font family name.');
 				return;
 			}
+			const famName = sanitizeFamilyName(rawFamName);
 
 			// Validate dynamic fallback rows
 			const fallbackRows = Array.from(elFallbackList.querySelectorAll('.fallback-row'));
@@ -549,7 +564,7 @@
 				if (name) {
 					fallbackFamilies.push({
 						name,
-						files: {0: fileReg, 1: fileBold, 2: fileItal, 3: fileBI}
+						files: [fileReg, fileBold, fileItal, fileBI]
 					});
 				}
 			}
@@ -581,48 +596,79 @@
 				if (!sizes.includes(uiSize0)) sizes.push(uiSize0);
 				if (!sizes.includes(uiSize1)) sizes.push(uiSize1);
 
-				// Delegate full package compilation to fontConvert.js
-				const builtFiles = await buildFontPackage({
+				// Delegate full package compilation to Web Worker (background thread)
+				const worker = new Worker('./fontWorker.js', { type: 'module' });
+
+				worker.onmessage = (e) => {
+					const { type, data, builtFiles, error } = e.data;
+
+					if (type === 'progress') {
+						progressBar.style.width = `${data.percent}%`;
+						progressPct.innerText = `${data.percent}%`;
+						progressText.innerText = data.message;
+					} else if (type === 'log') {
+						log(data.message, data.type);
+					} else if (type === 'done') {
+						// Clean up old blob URLs to prevent memory leak
+						activeBlobUrls.forEach(url => URL.revokeObjectURL(url));
+						activeBlobUrls = [];
+
+						// Show download list
+						elDownloadList.innerHTML = '';
+						builtFiles.forEach(f => {
+							const blob = new Blob([f.data], { type: 'application/octet-stream' });
+							const url = URL.createObjectURL(blob);
+							activeBlobUrls.push(url);
+
+							const li = document.createElement('li');
+							li.className = 'flex items-center justify-between py-3';
+							li.innerHTML = `
+								<span class="font-mono text-sm font-medium text-stone-900">${f.name}</span>
+								<a href="${url}" download="${f.name}" class="rounded-lg px-3 py-1.5 text-xs font-semibold text-stone-700 bg-white border border-stone-200 shadow-sm hover:bg-stone-50 transition active:scale-[0.98]">
+									Download
+								</a>
+							`;
+							elDownloadList.appendChild(li);
+						});
+
+						downloadContainer.classList.remove('hidden');
+						btnBuild.disabled = false;
+						worker.terminate();
+					} else if (type === 'error') {
+						log(`Fatal build error: ${error}`, 'error');
+						console.error(error);
+						progressText.innerText = 'Error occurred';
+						progressBar.style.width = '0%';
+						progressPct.innerText = '0%';
+						btnBuild.disabled = false;
+						worker.terminate();
+					}
+				};
+
+				worker.onerror = (err) => {
+					log(`Worker error: ${err.message || 'Unknown worker error'}`, 'error');
+					console.error(err);
+					progressText.innerText = 'Error occurred';
+					progressBar.style.width = '0%';
+					progressPct.innerText = '0%';
+					btnBuild.disabled = false;
+					worker.terminate();
+				};
+
+				worker.postMessage({
 					familyName: famName,
-					primaryFiles: {
-						0: regFile,
-						1: inputBold.files[0],
-						2: inputItalic.files[0],
-						3: inputBoldItalic.files[0]
-					},
+					primaryFiles: [
+						regFile,
+						inputBold.files[0] || null,
+						inputItalic.files[0] || null,
+						inputBoldItalic.files[0] || null
+					],
 					fallbackFamilies,
 					presets: checkedPresets,
 					customIntervalsStr: elCustomIntervals.value.trim(),
 					sizes,
-					darkenAa: elDarkenAa.checked,
-					onProgress: ({percent, message}) => {
-						progressBar.style.width = `${percent}%`;
-						progressPct.innerText = `${percent}%`;
-						progressText.innerText = message;
-					},
-					onLog: ({message, type}) => {
-						log(message, type);
-					}
+					darkenAa: elDarkenAa.checked
 				});
-
-				// Show download list
-				elDownloadList.innerHTML = '';
-				builtFiles.forEach(f => {
-					const blob = new Blob([f.data], {type: 'application/octet-stream'});
-					const url = URL.createObjectURL(blob);
-
-					const li = document.createElement('li');
-					li.className = 'flex items-center justify-between py-3';
-					li.innerHTML = `
-						<span class="font-mono text-sm font-medium text-stone-900">${f.name}</span>
-						<a href="${url}" download="${f.name}" class="rounded-lg px-3 py-1.5 text-xs font-semibold text-stone-700 bg-white border border-stone-200 shadow-sm hover:bg-stone-50 transition active:scale-[0.98]">
-							Download
-						</a>
-					`;
-					elDownloadList.appendChild(li);
-				});
-
-				downloadContainer.classList.remove('hidden');
 
 			} catch (err) {
 				log(`Fatal build error: ${err.message}`, 'error');
@@ -630,7 +676,6 @@
 				progressText.innerText = 'Error occurred';
 				progressBar.style.width = '0%';
 				progressPct.innerText = '0%';
-			} finally {
 				btnBuild.disabled = false;
 			}
 		});
